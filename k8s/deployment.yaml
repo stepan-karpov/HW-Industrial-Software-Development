@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+  labels:
+    app: app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: app
+  template:
+    metadata:
+      labels:
+        app: app
+      annotations:
+        # При изменении app-config обновите checksum (см. README) — поды пересоздадутся и подхватят новый конфиг.
+        checksum/config: f39dd3101df44ccd54e51787717f7fa28ec59c4c9ed9a8e6cf53acb14073576f
+    spec:
+      containers:
+        - name: app
+          image: app:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8280
+          volumeMounts:
+            - name: logs
+              mountPath: /app/logs
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+      volumes:
+        - name: logs
+          emptyDir: {}
+        - name: config
+          configMap:
+            name: app-config

@@ -58,6 +58,35 @@ kubectl port-forward pod/app-pod 8280:8280
 curl http://127.0.0.1:8280/status
 ```
 
+#### Пункт 3: Deployment (3 реплики) и проверка через Service
+
+Перед применением Deployment лучше убрать одиночный Pod из пункта 2, чтобы не путаться:
+
+```bash
+kubectl delete pod app-pod --ignore-not-found
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+kubectl rollout status deployment/app --timeout=120s
+```
+
+В Deployment для логов используется **`emptyDir`** (отдельный файл `/app/logs/app.log` у каждой реплики).
+
+Чтобы при изменении `ConfigMap` поды **пересоздались** и подхватили конфиг, в `k8s/deployment.yaml` задана аннотация **`checksum/config`**. После правки `k8s/configmap.yaml` обновите значение checksum, например так (нужен работающий кластер и применённый ConfigMap):
+
+```bash
+kubectl get configmap app-config -o jsonpath='{.data.config\.json}' | sha256sum | awk '{print $1}'
+```
+
+Подставьте полученную строку в `checksum/config` в `k8s/deployment.yaml` и снова выполните `kubectl apply -f k8s/deployment.yaml`. Альтернатива без смены checksum: `kubectl rollout restart deployment/app` (принудительный перезапуск).
+
+Проверка API через **Service** и `port-forward`:
+
+```bash
+kubectl port-forward svc/app 8280:8280
+curl http://127.0.0.1:8280/status
+```
+
 1. **Создать пользовательское веб-приложение (API)**  
    Приложение должно реализовать следующие REST-эндпоинты:
    - `GET /` — возвращает строку `"Welcome to the custom app"`
