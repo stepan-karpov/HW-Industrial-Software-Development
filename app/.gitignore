@@ -1,0 +1,3 @@
+# compiled binary (go build -o app)
+app
+app.log

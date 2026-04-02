@@ -1,0 +1,5 @@
+{
+  "port": 8080,
+  "greeting": "Welcome to the custom app",
+  "log_level": "info"
+}
