@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-pod
+  labels:
+    app: app
+spec:
+  containers:
+    - name: app
+      image: app:latest
+      imagePullPolicy: IfNotPresent
+      ports:
+        - name: http
+          containerPort: 8280
+          hostPort: 8280
+      volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+  volumes:
+    # Один каталог на узле кластера: все поды на этом узле видят один и тот же /app/logs/app.log
+    - name: logs
+      hostPath:
+        path: /mnt/k8s-app-logs
+        type: DirectoryOrCreate
+    - name: config
+      configMap:
+        name: app-config
+

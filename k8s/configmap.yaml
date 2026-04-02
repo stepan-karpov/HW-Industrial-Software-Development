@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  config.json: |
+    {
+      "port": 8280,
+      "greeting": "Welcome to the custom app",
+      "log_level": "info"
+    }
+

@@ -1,5 +1,63 @@
 ### **Домашнее задание: Развёртывание распределённой системы логирования и хранения с резервным копированием**
 
+### Сборка и запуск приложения
+
+#### Локальная сборка (Go)
+
+Приложение читает конфиг только из `/app/config/config.json` (как в `k8s/configmap.yaml`). Удобнее проверять через Docker или Kubernetes ниже.
+
+```bash
+cd app
+go build -o app .
+```
+
+Проверка ручек:
+
+```bash
+curl http://127.0.0.1:8280/
+curl http://127.0.0.1:8280/status
+curl -X POST http://127.0.0.1:8280/log -H 'Content-Type: application/json' -d '{"message":"test"}'
+curl http://127.0.0.1:8280/logs
+```
+
+#### Сборка Docker-образа
+
+```bash
+docker build -t app:latest ./app
+```
+
+#### Локальный Kubernetes (kind)
+
+Если кластера ещё нет:
+
+```bash
+kind create cluster --name hw-app
+kubectl config use-context kind-hw-app
+```
+
+Собрать образ, загрузить в kind, применить манифесты:
+
+```bash
+docker build -t app:latest ./app
+kind load docker-image app:latest --name hw-app
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/pod.yaml
+```
+
+Логи (`/app/logs/app.log`) монтируются через **`hostPath`** на узле (`/mnt/k8s-app-logs` на ноде → `/app/logs` в контейнере). Пока все реплики живут **на одном узле** (типичный **kind** с одной нодой), это **один и тот же файл** для всех подов. В **мульти-нодовом** кластере у каждой ноды свой диск — нужен общий том (**NFS**, **ReadWriteMany** PVC и т.п.), иначе логи снова разъедутся по узлам.
+
+Приложение в контейнере слушает **8280** (порт **8080** на хосте остаётся свободным для других процессов). У `kind` проброс `hostPort` на машину-хост часто недоступен, поэтому надёжнее:
+
+```bash
+kubectl port-forward pod/app-pod 8280:8280
+```
+
+Проверка:
+
+```bash
+curl http://127.0.0.1:8280/status
+```
+
 1. **Создать пользовательское веб-приложение (API)**  
    Приложение должно реализовать следующие REST-эндпоинты:
    - `GET /` — возвращает строку `"Welcome to the custom app"`

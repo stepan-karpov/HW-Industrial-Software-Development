@@ -17,8 +17,12 @@ import (
 
 func main() {
 	paths := ResolvePaths()
-	cfg := LoadConfig(paths.ConfigPath)
 	logger := log.New(os.Stdout, "", log.LstdFlags)
+
+	cfg, err := LoadConfig(paths.ConfigPath)
+	if err != nil {
+		logger.Fatalf("failed to load config: %v", err)
+	}
 
 	if err := EnsureLogFileExists(paths.LogPath); err != nil {
 		logger.Fatalf("failed to prepare log file: %v", err)

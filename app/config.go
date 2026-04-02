@@ -2,19 +2,15 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
 const (
-	defaultPort     = 8080
-	defaultGreeting = "Welcome to the custom app"
-	defaultLogLevel = "info"
-
-	defaultConfigPath = "/app/config/config.json"
-	defaultLogPath    = "/app/logs/app.log"
+	configPath = "/app/config/config.json"
+	logPath    = "/app/logs/app.log"
 )
 
 type Config struct {
@@ -29,52 +25,31 @@ type Paths struct {
 }
 
 func ResolvePaths() Paths {
-	p := Paths{
-		ConfigPath: defaultConfigPath,
-		LogPath:    defaultLogPath,
-	}
-	if v := strings.TrimSpace(os.Getenv("APP_CONFIG_PATH")); v != "" {
-		p.ConfigPath = v
-	}
-	if v := strings.TrimSpace(os.Getenv("APP_LOG_PATH")); v != "" {
-		p.LogPath = v
-	}
-	return p
+	return Paths{ConfigPath: configPath, LogPath: logPath}
 }
 
-func LoadConfig(path string) Config {
-	cfg := Config{
-		Port:     defaultPort,
-		Greeting: defaultGreeting,
-		LogLevel: defaultLogLevel,
+func LoadConfig(path string) (Config, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return Config{}, fmt.Errorf("read config %q: %w", path, err)
 	}
 
-	if b, err := os.ReadFile(path); err == nil {
-		_ = json.Unmarshal(b, &cfg)
+	var cfg Config
+	if err := json.Unmarshal(b, &cfg); err != nil {
+		return Config{}, fmt.Errorf("parse config %q: %w", path, err)
 	}
 
-	if v := strings.TrimSpace(os.Getenv("APP_PORT")); v != "" {
-		if p, err := strconv.Atoi(v); err == nil && p > 0 && p < 65536 {
-			cfg.Port = p
-		}
-	}
-	if v := strings.TrimSpace(os.Getenv("APP_GREETING")); v != "" {
-		cfg.Greeting = v
-	}
-	if v := strings.TrimSpace(os.Getenv("APP_LOG_LEVEL")); v != "" {
-		cfg.LogLevel = v
-	}
-
-	if cfg.Port == 0 {
-		cfg.Port = defaultPort
+	if cfg.Port <= 0 || cfg.Port >= 65536 {
+		return Config{}, fmt.Errorf("invalid config: port must be 1..65535")
 	}
 	if strings.TrimSpace(cfg.Greeting) == "" {
-		cfg.Greeting = defaultGreeting
+		return Config{}, fmt.Errorf("invalid config: greeting must be non-empty")
 	}
 	if strings.TrimSpace(cfg.LogLevel) == "" {
-		cfg.LogLevel = defaultLogLevel
+		return Config{}, fmt.Errorf("invalid config: log_level must be non-empty")
 	}
-	return cfg
+
+	return cfg, nil
 }
 
 func EnsureLogFileExists(path string) error {
