@@ -31,8 +31,11 @@ spec:
               mountPath: /app/config
               readOnly: true
       volumes:
+        # Общий каталог на узле — нужен DaemonSet log-agent (п. 5) для чтения app.log
         - name: logs
-          emptyDir: {}
+          hostPath:
+            path: /mnt/k8s-app-logs
+            type: DirectoryOrCreate
         - name: config
           configMap:
             name: app-config

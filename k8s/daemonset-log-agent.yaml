@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: log-agent
+  labels:
+    app: log-agent
+spec:
+  selector:
+    matchLabels:
+      app: log-agent
+  template:
+    metadata:
+      labels:
+        app: log-agent
+    spec:
+      # Чтобы поды были и на control-plane (например, kind с одной нодой)
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: log-agent
+          image: busybox:1.36
+          args:
+            - sh
+            - -c
+            - |
+              mkdir -p /host-logs
+              touch /host-logs/app.log
+              exec tail -F /host-logs/app.log
+          volumeMounts:
+            - name: app-logs
+              mountPath: /host-logs
+      volumes:
+        - name: app-logs
+          hostPath:
+            path: /mnt/k8s-app-logs
+            type: DirectoryOrCreate

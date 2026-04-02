@@ -70,7 +70,7 @@ kubectl apply -f k8s/service.yaml
 kubectl rollout status deployment/app --timeout=120s
 ```
 
-В Deployment для логов используется **`emptyDir`** (отдельный файл `/app/logs/app.log` у каждой реплики).
+В Deployment для логов используется **`hostPath`** [`/mnt/k8s-app-logs`](k8s/deployment.yaml) — общий на узле каталог (как в [`k8s/pod.yaml`](k8s/pod.yaml)), чтобы **DaemonSet log-agent** мог читать тот же `app.log` (п. 5).
 
 Чтобы при изменении `ConfigMap` поды **пересоздались** и подхватили конфиг, в `k8s/deployment.yaml` задана аннотация **`checksum/config`**. После правки `k8s/configmap.yaml` обновите значение checksum, например так (нужен работающий кластер и применённый ConfigMap):
 
@@ -121,6 +121,23 @@ kubectl run curl-lb --rm --restart=Never -i --image=curlimages/curl -- \
 (Под и namespace по умолчанию — `default`; короткое имя **`http://app:8280`** тоже подойдёт.)
 
 С хоста можно оставить цикл с **`Connection: close`** — иногда появятся разные `pod`, но для отчёта лучше опираться на команду выше.
+
+#### Пункт 5: DaemonSet `log-agent`
+
+Манифест: [`k8s/daemonset-log-agent.yaml`](k8s/daemonset-log-agent.yaml). На каждом узле запускается контейнер **`busybox`**, который монтирует тот же **`hostPath`** `/mnt/k8s-app-logs`, что и приложение, и пишет содержимое **`app.log`** в **stdout** (`tail -F`).
+
+```bash
+kubectl apply -f k8s/daemonset-log-agent.yaml
+kubectl rollout status daemonset/log-agent --timeout=120s
+```
+
+Сгенерируйте строки в логе приложения (например, `POST /log`), затем:
+
+```bash
+kubectl logs -l app=log-agent --tail=50
+```
+
+В выводе должны быть строки из **`/app/logs/app.log`** (время и сообщения). Если подов несколько, смотрите лог конкретного: `kubectl get pods -l app=log-agent` и `kubectl logs <имя-пода>`.
 
 1. **Создать пользовательское веб-приложение (API)**  
    Приложение должно реализовать следующие REST-эндпоинты:
