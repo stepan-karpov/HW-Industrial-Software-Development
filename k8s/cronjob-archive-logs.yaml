@@ -1,0 +1,49 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: app-logs-archive
+  labels:
+    app: app-logs-archive
+spec:
+  schedule: "*/10 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: app-logs-archive
+        spec:
+          restartPolicy: OnFailure
+          tolerations:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+              effect: NoSchedule
+            - key: node-role.kubernetes.io/master
+              operator: Exists
+              effect: NoSchedule
+          containers:
+            - name: archive
+              image: alpine:3.20
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  ts=$(date -u +%Y%m%d%H%M%S)
+                  # Тот же hostPath, что у Deployment (общая директория с app.log на узле)
+                  # -C /app logs — эквивалентно архивации /app/logs/ без предупреждения tar про ведущий /
+                  tar -czf "/tmp/app-logs-${ts}.tar.gz" -C /app logs
+                  echo "created /tmp/app-logs-${ts}.tar.gz"
+                  ls -la "/tmp/app-logs-${ts}.tar.gz"
+              volumeMounts:
+                - name: logs
+                  mountPath: /app/logs
+                  readOnly: true
+          volumes:
+            - name: logs
+              hostPath:
+                path: /mnt/k8s-app-logs
+                type: DirectoryOrCreate

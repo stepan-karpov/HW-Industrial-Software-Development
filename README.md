@@ -139,6 +139,34 @@ kubectl logs -l app=log-agent --tail=50
 
 В выводе должны быть строки из **`/app/logs/app.log`** (время и сообщения). Если подов несколько, смотрите лог конкретного: `kubectl get pods -l app=log-agent` и `kubectl logs <имя-пода>`.
 
+#### Пункт 6: CronJob архивирования логов
+
+Манифест: [`k8s/cronjob-archive-logs.yaml`](k8s/cronjob-archive-logs.yaml). Расписание **каждые 10 минут** (`*/10 * * * *`). Контейнер **`alpine`** монтирует тот же **`hostPath`** `/mnt/k8s-app-logs` в **`/app/logs`** (как у приложения) и выполняет:
+
+`tar -czf /tmp/app-logs-<timestamp>.tar.gz /app/logs`
+
+Архивы лежат в **`/tmp`** внутри пода Job (по заданию). Вместо `hostPath` можно было бы перед архивацией скачать логи с **`curl http://app:8280/logs`** — здесь используется общая директория на узле, как в задании. На **мульти-нодовом** кластере убедитесь, что Job попадает на узел с данными (или используйте общий том / HTTP).
+
+```bash
+kubectl apply -f k8s/cronjob-archive-logs.yaml
+```
+
+Не дожидаясь 10 минут, запустите Job вручную:
+
+```bash
+kubectl create job --from=cronjob/app-logs-archive app-logs-archive-manual
+kubectl wait --for=condition=complete job/app-logs-archive-manual --timeout=120s
+kubectl logs job/app-logs-archive-manual
+```
+
+Проверка архива в поде Job:
+
+```bash
+POD=$(kubectl get pods -l job-name=app-logs-archive-manual -o jsonpath='{.items[0].metadata.name}')
+kubectl exec "$POD" -- ls -la /tmp
+kubectl exec "$POD" -- sh -c 'tar -tzf /tmp/app-logs-*.tar.gz'
+```
+
 1. **Создать пользовательское веб-приложение (API)**  
    Приложение должно реализовать следующие REST-эндпоинты:
    - `GET /` — возвращает строку `"Welcome to the custom app"`
