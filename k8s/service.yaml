@@ -6,6 +6,8 @@ metadata:
     app: app
 spec:
   type: ClusterIP
+  # По умолчанию без привязки сессии — запросы распределяются между подами.
+  sessionAffinity: None
   selector:
     app: app
   ports:

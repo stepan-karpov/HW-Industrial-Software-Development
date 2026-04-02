@@ -87,10 +87,45 @@ kubectl port-forward svc/app 8280:8280
 curl http://127.0.0.1:8280/status
 ```
 
+#### Пункт 4: ClusterIP Service и балансировка
+
+После изменений в коде приложения пересоберите образ и обновите поды, например:
+
+```bash
+docker build -t app:latest ./app
+kind load docker-image app:latest --name hw-app
+kubectl rollout restart deployment/app
+```
+
+Сервис описан в [`k8s/service.yaml`](k8s/service.yaml): имя **`app`**, тип **`ClusterIP`**, порт **8280** → поды с лейблом `app: app`. Внутри кластера DNS: **`http://app.default.svc.cluster.local:8280`** (в том же namespace достаточно **`http://app:8280`**).
+
+Проверка ручек через Service с хоста (после `kubectl port-forward svc/app 8280:8280`):
+
+```bash
+curl -s http://127.0.0.1:8280/logs
+curl -s -X POST http://127.0.0.1:8280/log -H 'Content-Type: application/json' -d '{"message":"test"}'
+```
+
+Ответ **`GET /status`** содержит поле **`pod`** (имя пода в Kubernetes), чтобы увидеть балансировку.
+
+**Почему через `kubectl port-forward svc/app` часто виден только один `pod`:** прокси `kubectl` к **Service** не обязан вести себя как полноценный kube-proxy: трафик может уходить **на один выбранный под** на всё время сессии `port-forward`, даже если с хоста открываются новые TCP‑соединения и даже с `Connection: close`. Это ожидаемое ограничение, а не ошибка Service.
+
+**Надёжная проверка балансировки** — запросы к **`ClusterIP` Service изнутри кластера** (там kube-proxy реально распределяет соединения между подами):
+
+```bash
+kubectl run curl-lb --rm --restart=Never -i --image=curlimages/curl -- \
+  sh -c 'for i in $(seq 1 30); do curl -s -H "Connection: close" http://app.default.svc.cluster.local:8280/status; echo; done' \
+  | grep -oE '"pod":"[^"]+"' | sort | uniq -c
+```
+
+(Под и namespace по умолчанию — `default`; короткое имя **`http://app:8280`** тоже подойдёт.)
+
+С хоста можно оставить цикл с **`Connection: close`** — иногда появятся разные `pod`, но для отчёта лучше опираться на команду выше.
+
 1. **Создать пользовательское веб-приложение (API)**  
    Приложение должно реализовать следующие REST-эндпоинты:
    - `GET /` — возвращает строку `"Welcome to the custom app"`
-   - `GET /status` — возвращает JSON `{"status": "ok"}`
+   - `GET /status` — возвращает JSON `{"status": "ok", "pod": "<имя пода>"}` (поле `pod` нужно для проверки балансировки в п. 4)
    - `POST /log` — принимает JSON `{"message": "some log"}` и записывает его в файл `/app/logs/app.log`
    - `GET /logs` — возвращает содержимое файла `/app/logs/app.log`
 
